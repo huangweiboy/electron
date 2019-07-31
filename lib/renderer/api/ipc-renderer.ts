@@ -22,7 +22,7 @@ ipcRenderer.sendTo = function (webContentsId, channel, ...args) {
 }
 
 ipcRenderer.invoke = function (channel, ...args) {
-  return ipc.invoke(channel, args).then(({ error, result }) => {
+  return ipc.invoke(internal, channel, args).then(({ error, result }) => {
     if (error) { throw new Error(`Error invoking remote method '${channel}': ${error}`) }
     return result
   })
