@@ -5,6 +5,7 @@
 #ifndef SHELL_COMMON_NATIVE_MATE_CONVERTERS_FILE_PATH_CONVERTER_H_
 #define SHELL_COMMON_NATIVE_MATE_CONVERTERS_FILE_PATH_CONVERTER_H_
 
+#include "native_mate/converter.h"
 #include "shell/common/gin_converters/file_path_converter.h"
 
 namespace mate {
