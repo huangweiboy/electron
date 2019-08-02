@@ -1590,7 +1590,6 @@ bool WebContents::IsCurrentlyAudible() {
 #if BUILDFLAG(ENABLE_PRINTING)
 void WebContents::Print(mate::Arguments* args) {
   mate::Dictionary options = mate::Dictionary::CreateEmpty(args->isolate());
-  base::DictionaryValue settings;
   if (args->Length() >= 1 && !args->GetNext(&options)) {
     args->ThrowError("Invalid print settings specified");
     return;
@@ -1605,116 +1604,124 @@ void WebContents::Print(mate::Arguments* args) {
   bool silent = false;
   options.Get("silent", &silent);
 
-  // Set custom margin settings
-  mate::Dictionary margins;
-  if (options.Get("margins", &margins)) {
-    printing::MarginType margin_type = printing::DEFAULT_MARGINS;
-    margins.Get("marginType", &margin_type);
-    settings.SetInteger(printing::kSettingMarginsType, margin_type);
-
-    if (margin_type == printing::CUSTOM_MARGINS) {
-      int top = 0;
-      margins.Get("top", &top);
-      settings.SetInteger(printing::kSettingMarginTop, top);
-      int bottom = 0;
-      margins.Get("bottom", &bottom);
-      settings.SetInteger(printing::kSettingMarginBottom, bottom);
-      int left = 0;
-      margins.Get("left", &left);
-      settings.SetInteger(printing::kSettingMarginLeft, left);
-      int right = 0;
-      margins.Get("right", &right);
-      settings.SetInteger(printing::kSettingMarginRight, right);
-    }
-  } else {
-    settings.SetInteger(printing::kSettingMarginsType,
-                        printing::DEFAULT_MARGINS);
-  }
-
-  settings.SetBoolean(printing::kSettingHeaderFooterEnabled, false);
-
-  // Set whether to print color or greyscale
-  bool print_color = true;
-  options.Get("color", &print_color);
-  int color_setting = print_color ? printing::COLOR : printing::GRAY;
-  settings.SetInteger(printing::kSettingColor, color_setting);
-
-  bool landscape = false;
-  options.Get("landscape", &landscape);
-  settings.SetBoolean(printing::kSettingLandscape, landscape);
-
-  base::string16 device_name;
-  options.Get("deviceName", &device_name);
-  settings.SetString(printing::kSettingDeviceName, device_name);
-
-  int scale_factor = 100;
-  options.Get("scaleFactor", &scale_factor);
-  settings.SetInteger(printing::kSettingScaleFactor, scale_factor);
-
-  int pages_per_sheet = 1;
-  options.Get("pagesPerSheet", &pages_per_sheet);
-  settings.SetInteger(printing::kSettingPagesPerSheet, pages_per_sheet);
-
-  bool collate = true;
-  options.Get("collate", &collate);
-  settings.SetBoolean(printing::kSettingCollate, collate);
-
-  int copies = 1;
-  options.Get("copies", &copies);
-  settings.SetInteger(printing::kSettingCopies, copies);
-
   bool print_background = false;
   options.Get("printBackground", &print_background);
-  settings.SetBoolean(printing::kSettingShouldPrintBackgrounds,
-                      print_background);
 
-  // For now we don't want to allow the user to enable these settings
-  // but we need to set them or a CHECK is hit.
-  settings.SetBoolean(printing::kSettingPrintToPDF, false);
-  settings.SetBoolean(printing::kSettingCloudPrintDialog, false);
-  settings.SetBoolean(printing::kSettingPrintWithPrivet, false);
-  settings.SetBoolean(printing::kSettingShouldPrintSelectionOnly, false);
-  settings.SetBoolean(printing::kSettingPrintWithExtension, false);
-  settings.SetBoolean(printing::kSettingRasterizePdf, false);
+  mate::Dictionary print_settings =
+      mate::Dictionary::CreateEmpty(args->isolate());
+  base::DictionaryValue settings;
+  if (silent && options.Get("printSettings", &print_settings)) {
+    // Set custom margin settings
+    mate::Dictionary margins;
+    if (print_settings.Get("margins", &margins)) {
+      printing::MarginType margin_type = printing::DEFAULT_MARGINS;
+      margins.Get("marginType", &margin_type);
+      settings.SetInteger(printing::kSettingMarginsType, margin_type);
 
-  // Set custom page ranges to print
-  std::vector<mate::Dictionary> page_ranges;
-  if (options.Get("pageRanges", &page_ranges)) {
-    std::unique_ptr<base::ListValue> page_range_list(new base::ListValue());
-    for (size_t i = 0; i < page_ranges.size(); ++i) {
-      int from, to;
-      if (page_ranges[i].Get("from", &from) && page_ranges[i].Get("to", &to)) {
-        std::unique_ptr<base::DictionaryValue> range(
-            new base::DictionaryValue());
-        range->SetInteger(printing::kSettingPageRangeFrom, from);
-        range->SetInteger(printing::kSettingPageRangeTo, to);
-        page_range_list->Append(std::move(range));
-      } else {
-        continue;
+      if (margin_type == printing::CUSTOM_MARGINS) {
+        int top = 0;
+        margins.Get("top", &top);
+        settings.SetInteger(printing::kSettingMarginTop, top);
+        int bottom = 0;
+        margins.Get("bottom", &bottom);
+        settings.SetInteger(printing::kSettingMarginBottom, bottom);
+        int left = 0;
+        margins.Get("left", &left);
+        settings.SetInteger(printing::kSettingMarginLeft, left);
+        int right = 0;
+        margins.Get("right", &right);
+        settings.SetInteger(printing::kSettingMarginRight, right);
       }
+    } else {
+      settings.SetInteger(printing::kSettingMarginsType,
+                          printing::DEFAULT_MARGINS);
     }
-    if (page_range_list->GetSize() > 0)
-      settings.SetList(printing::kSettingPageRange, std::move(page_range_list));
-  }
 
-  // Set custom duplex mode
-  printing::DuplexMode duplex_mode;
-  options.Get("duplexMode", &duplex_mode);
-  settings.SetInteger(printing::kSettingDuplexMode, duplex_mode);
+    settings.SetBoolean(printing::kSettingHeaderFooterEnabled, false);
 
-  // Set custom dots per inch (dpi)
-  mate::Dictionary dpi_settings;
-  int dpi = 72;
-  if (options.Get("dpi", &dpi_settings)) {
-    int horizontal = 72;
-    dpi_settings.Get("horizontal", &horizontal);
-    settings.SetInteger(printing::kSettingDpiHorizontal, horizontal);
-    int vertical = 72;
-    dpi_settings.Get("vertical", &vertical);
-    settings.SetInteger(printing::kSettingDpiVertical, vertical);
-  } else {
-    settings.SetInteger(printing::kSettingDpiHorizontal, dpi);
-    settings.SetInteger(printing::kSettingDpiVertical, dpi);
+    // Set whether to print color or greyscale
+    bool print_color = true;
+    print_settings.Get("color", &print_color);
+    int color_setting = print_color ? printing::COLOR : printing::GRAY;
+    settings.SetInteger(printing::kSettingColor, color_setting);
+
+    bool landscape = false;
+    print_settings.Get("landscape", &landscape);
+    settings.SetBoolean(printing::kSettingLandscape, landscape);
+
+    base::string16 device_name;
+    print_settings.Get("deviceName", &device_name);
+    settings.SetString(printing::kSettingDeviceName, device_name);
+
+    int scale_factor = 100;
+    print_settings.Get("scaleFactor", &scale_factor);
+    settings.SetInteger(printing::kSettingScaleFactor, scale_factor);
+
+    int pages_per_sheet = 1;
+    print_settings.Get("pagesPerSheet", &pages_per_sheet);
+    settings.SetInteger(printing::kSettingPagesPerSheet, pages_per_sheet);
+
+    bool collate = true;
+    print_settings.Get("collate", &collate);
+    settings.SetBoolean(printing::kSettingCollate, collate);
+
+    int copies = 1;
+    print_settings.Get("copies", &copies);
+    settings.SetInteger(printing::kSettingCopies, copies);
+
+    settings.SetBoolean(printing::kSettingShouldPrintBackgrounds,
+                        print_background);
+
+    // For now we don't want to allow the user to enable these settings
+    // but we need to set them or a CHECK is hit.
+    settings.SetBoolean(printing::kSettingPrintToPDF, false);
+    settings.SetBoolean(printing::kSettingCloudPrintDialog, false);
+    settings.SetBoolean(printing::kSettingPrintWithPrivet, false);
+    settings.SetBoolean(printing::kSettingShouldPrintSelectionOnly, false);
+    settings.SetBoolean(printing::kSettingPrintWithExtension, false);
+    settings.SetBoolean(printing::kSettingRasterizePdf, false);
+
+    // Set custom page ranges to print
+    std::vector<mate::Dictionary> page_ranges;
+    if (print_settings.Get("pageRanges", &page_ranges)) {
+      std::unique_ptr<base::ListValue> page_range_list(new base::ListValue());
+      for (size_t i = 0; i < page_ranges.size(); ++i) {
+        int from, to;
+        if (page_ranges[i].Get("from", &from) &&
+            page_ranges[i].Get("to", &to)) {
+          std::unique_ptr<base::DictionaryValue> range(
+              new base::DictionaryValue());
+          range->SetInteger(printing::kSettingPageRangeFrom, from);
+          range->SetInteger(printing::kSettingPageRangeTo, to);
+          page_range_list->Append(std::move(range));
+        } else {
+          continue;
+        }
+      }
+      if (page_range_list->GetSize() > 0)
+        settings.SetList(printing::kSettingPageRange,
+                         std::move(page_range_list));
+    }
+
+    // Set custom duplex mode
+    printing::DuplexMode duplex_mode;
+    print_settings.Get("duplexMode", &duplex_mode);
+    settings.SetInteger(printing::kSettingDuplexMode, duplex_mode);
+
+    // Set custom dots per inch (dpi)
+    mate::Dictionary dpi_settings;
+    int dpi = 72;
+    if (print_settings.Get("dpi", &dpi_settings)) {
+      int horizontal = 72;
+      dpi_settings.Get("horizontal", &horizontal);
+      settings.SetInteger(printing::kSettingDpiHorizontal, horizontal);
+      int vertical = 72;
+      dpi_settings.Get("vertical", &vertical);
+      settings.SetInteger(printing::kSettingDpiVertical, vertical);
+    } else {
+      settings.SetInteger(printing::kSettingDpiHorizontal, dpi);
+      settings.SetInteger(printing::kSettingDpiVertical, dpi);
+    }
   }
 
   auto* print_view_manager =
